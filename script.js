@@ -4,7 +4,7 @@ const clamp=(v,a,b)=>Math.min(b,Math.max(a,v)),eq=(a,b)=>Math.abs(a-b)<1e-9,mean
 const med=s=>{const m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
 // 四分位数：昇順に並べ、下半分・上半分それぞれの中央値(奇数個のときは全体の中央値を含めない)。分散はnで割る
 function stats(a){const s=[...a].sort((x,y)=>x-y),n=s.length,m=n>>1,mu=mean(s),va=mean(s.map(x=>(x-mu)**2)),q1=med(s.slice(0,m)),q3=med(s.slice(n%2?m+1:m));
- return{n,min:s[0],q1,med:med(s),q3,max:s[n-1],mean:mu,var:va,sd:Math.sqrt(va),range:s[n-1]-s[0],iqr:q3-q1};}
+ return{n,min:s[0],q1,med:med(s),q3,max:s[n-1],mean:mu,var:va,sd:Math.sqrt(va),range:s[n-1]-s[0],iqr:q3-q1,qd:(q3-q1)/2};}
 const f=x=>Number.isInteger(x)?String(x):x.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
 const five=s=>[s.min,s.q1,s.med,s.q3,s.max],same5=(a,b)=>five(a).every((v,i)=>eq(v,five(b)[i]));
 const sameSet=(a,b)=>{const x=[...a].sort((p,q)=>p-q),y=[...b].sort((p,q)=>p-q);return x.length===y.length&&x.every((v,i)=>v===y[i])};
@@ -18,7 +18,7 @@ const DS={q1:[10,30,40,55,60,70,90],q2x:[20,30,40,50,60,70,80],q2y:[10,30,40,50,
 const mode=d=>{const c={};d.forEach(v=>c[v]=(c[v]||0)+1);const m=Math.max(...Object.values(c));return Object.keys(c).filter(k=>c[k]===m).join('と')};
 // 自己テスト(既知のデータで計算関数と教材データを検証)
 function selfTest(){const T=[],t=(n,c)=>T.push([n,!!c]);let s=stats([1,2,3,4,5,6,7]);
- t('奇数個の四分位数・分散',s.q1===2&&s.med===4&&s.q3===6&&eq(s.var,4));s=stats([1,2,3,4,5,6]);t('偶数個',s.q1===2&&s.med===3.5&&s.q3===5);
+ t('奇数個の四分位数・分散・四分位偏差',s.q1===2&&s.med===4&&s.q3===6&&eq(s.var,4)&&s.qd===2);s=stats([1,2,3,4,5,6]);t('偶数個',s.q1===2&&s.med===3.5&&s.q3===5);
  s=stats([5,5,5,5,5,5,5]);t('全て同じ値',s.var===0&&s.iqr===0&&s.range===0);s=stats(Array.from({length:11},(_,i)=>i));t('11個',s.q1===2&&s.q3===8);
  s=stats(Array.from({length:18},(_,i)=>i+1));t('18個',s.q1===5&&s.q3===14&&s.med===9.5);
  TWINS.forEach((w,i)=>t('双子の例'+(i+1),same5(stats(w.d),stats(w.ex))&&!sameSet(w.d,w.ex)));
@@ -31,7 +31,10 @@ function selfTest(){const T=[],t=(n,c)=>T.push([n,!!c]);let s=stats([1,2,3,4,5,6
 function histSVG(d){const c=Array(10).fill(0);d.forEach(v=>c[Math.min(9,Math.floor(v/10))]++);const m=Math.max(...c,1);
  return `<g>${c.map((k,i)=>`<rect x="${40+i*46}" y="${170-k/m*140}" width="44" height="${k/m*140}" fill="#6b8cff"/><text x="${62+i*46}" y="${166-k/m*140}" font-size="12" text-anchor="middle">${k||''}</text><text x="${40+i*46}" y="188" font-size="10" text-anchor="middle">${i*10}</text>`).join('')}<text x="500" y="188" font-size="10" text-anchor="middle">100</text><line x1="40" y1="170" x2="500" y2="170" stroke="#333"/></g>`.replace('<g>','<g>')+'';}
 const HV='0 0 520 200';
-function boxSVG(rows){const X=v=>70+v/100*430,H=rows.length*56+24;let g='';for(let v=0;v<=100;v+=10)g+=`<line x1="${X(v)}" y1="4" x2="${X(v)}" y2="${H-18}" stroke="#e5e7eb"/><text x="${X(v)}" y="${H-5}" font-size="10" text-anchor="middle">${v}</text>`;
+// auto=true：データの最小値〜最大値に合わせて目盛りの範囲と間隔を決める(false：0〜100固定)
+function axis(rows){let lo=Math.min(...rows.map(r=>r[1].min)),hi=Math.max(...rows.map(r=>r[1].max));const span=Math.max(hi-lo,5),pad=span*.12,st=[1,2,5,10,20,25,50].find(k=>span/k<=9)||50;
+ lo=Math.max(0,Math.floor((lo-pad)/st)*st);hi=Math.min(100,Math.ceil((hi+pad)/st)*st);if(hi-lo<st*2)hi=Math.min(100,lo+st*2);if(hi-lo<st*2)lo=Math.max(0,hi-st*2);return{lo,hi,st};}
+function boxSVG(rows,auto){const A=auto?axis(rows):{lo:0,hi:100,st:10},X=v=>70+(v-A.lo)/(A.hi-A.lo)*430,H=rows.length*56+24;let g='';for(let v=A.lo;v<=A.hi;v+=A.st)g+=`<line x1="${X(v)}" y1="4" x2="${X(v)}" y2="${H-18}" stroke="#e5e7eb"/><text x="${X(v)}" y="${H-5}" font-size="10" text-anchor="middle">${v}</text>`;
  rows.forEach(([nm,s],r)=>{const y=8+r*56,cl=['#1d4ed8','#d97706'][r%2];g+=`<text x="4" y="${y+30}" font-size="12">${nm}</text><line x1="${X(s.min)}" y1="${y+26}" x2="${X(s.max)}" y2="${y+26}" stroke="${cl}" stroke-width="2"/><line x1="${X(s.min)}" y1="${y+16}" x2="${X(s.min)}" y2="${y+36}" stroke="${cl}" stroke-width="2"/><line x1="${X(s.max)}" y1="${y+16}" x2="${X(s.max)}" y2="${y+36}" stroke="${cl}" stroke-width="2"/><rect x="${X(s.q1)}" y="${y+12}" width="${Math.max(X(s.q3)-X(s.q1),1)}" height="28" fill="${cl}" fill-opacity=".18" stroke="${cl}" stroke-width="2"/><line x1="${X(s.med)}" y1="${y+12}" x2="${X(s.med)}" y2="${y+40}" stroke="${cl}" stroke-width="4"/>`;
   [[s.min,y+10],[s.med,y+8],[s.max,y+10]].forEach(([v,yy])=>g+=`<text x="${X(v)}" y="${yy}" font-size="10" text-anchor="middle">${f(v)}</text>`);[s.q1,s.q3].forEach(v=>g+=`<text x="${X(v)}" y="${y+50}" font-size="10" text-anchor="middle">${f(v)}</text>`);});
  return `<g>${g}</g>`;}
@@ -65,12 +68,12 @@ const mark=(a,b)=>'['+a.map((v,i)=>v!==b[i]?`<b>${v}</b>`:v).join(', ')+']';
 function Lab(root,o){let n=o.sizes[0],data,base=null,mi=0,x=0;const q=s=>root.querySelector(s),uid='d'+Math.random().toString(36).slice(2,6);
  root.innerHTML=`<div class="top"><label>データ数 <select class="sz"></select></label> <button class="rs">初期値に戻す</button><span class="note"> データ数を変えると、先頭から既存の値を引き継ぎ不足分は初期値で補います（課題の基準データは解除されます）。値は0〜100、▲▼は5刻み。</span></div>
  <div class="grid"></div><div class="cards"></div><div class="charts"><div><h4>ヒストグラム（階級幅10：0以上10未満…90以上100以下）</h4><svg class="hs"></svg></div><div><h4>箱ひげ図</h4><svg class="bs"></svg></div></div>
- <details><summary>計算の定義</summary><p class="note">分散＝（偏差の2乗の平均）＝各値と平均値の差を2乗して平均（データ数nで割る）。標準偏差＝√分散。四分位数＝昇順に並べて下半分・上半分に分け、それぞれの中央値（奇数個のときは全体の中央値を含めない）。範囲＝最大値−最小値、四分位範囲＝Q3−Q1。</p></details>
+ <details><summary>計算の定義</summary><p class="note">分散＝（偏差の2乗の平均）＝各値と平均値の差を2乗して平均（データ数nで割る）。標準偏差＝√分散。四分位数＝昇順に並べて下半分・上半分に分け、それぞれの中央値（奇数個のときは全体の中央値を含めない）。範囲＝最大値−最小値、四分位範囲＝Q3−Q1、四分位偏差＝四分位範囲÷2。箱ひげ図の目盛りは入力値の最小〜最大に合わせて自動で調整されます。</p></details>
  <div class="ms"><div class="ml"></div><p class="mt"></p><div class="dr"></div><button class="st">この課題を始める（いまのデータを基準にする）</button><div class="stat"></div><button class="hi">ヒントを見る</button><button class="an">答えを見る</button><div class="out"></div></div>`;
  o.sizes.forEach(k=>q('.sz').add(new Option(k+'個',k)));
  const build=v=>{data=editor(q('.grid'),v,render);render()};
- function render(){const s=stats(data);q('.cards').innerHTML=[['平均値',s.mean],['中央値',s.med],['分散',s.var],['標準偏差',s.sd],['範囲',s.range],['四分位範囲',s.iqr]].map(([a,b])=>`<div class="card"><span>${a}</span><b>${f(b)}</b></div>`).join('')+`<div class="five">最小値 ${f(s.min)}／Q1 ${f(s.q1)}／中央値 ${f(s.med)}／Q3 ${f(s.q3)}／最大値 ${f(s.max)}</div>`;
-  setSvg(q('.hs'),histSVG(data),HV);setSvg(q('.bs'),boxSVG([['データ',s]]),`0 0 520 ${80}`);status();}
+ function render(){const s=stats(data);q('.cards').innerHTML=[['平均値',s.mean],['中央値',s.med],['第1四分位数 Q1',s.q1],['第3四分位数 Q3',s.q3],['分散',s.var],['標準偏差',s.sd],['範囲',s.range],['四分位範囲',s.iqr],['四分位偏差',s.qd]].map(([a,b])=>`<div class="card"><span>${a}</span><b>${f(b)}</b></div>`).join('')+`<div class="five">最小値 ${f(s.min)}／Q1 ${f(s.q1)}／中央値 ${f(s.med)}／Q3 ${f(s.q3)}／最大値 ${f(s.max)}</div>`;
+  setSvg(q('.hs'),histSVG(data),HV);setSvg(q('.bs'),boxSVG([['データ',s]],true),`0 0 520 ${80}`);status();}
  function status(){const M=o.missions[mi],el=q('.stat');if(!base){el.textContent='「この課題を始める」を押すと、いまのデータが基準になります。';return}
   const b=stats(base),c=stats(data),cn=M.can?M.can(b):true;if(cn!==true){el.innerHTML=`<span class="bad">${cn}</span>`;return}
   const r=M.c(b,c,x,base,data),all=r.every(v=>v[1]);el.innerHTML=`<div class="note">基準：${sl(b,b).replace(/(\S+) (\S+)→\S+/g,'$1 $2')}</div>`+r.map(v=>`<div class="${v[1]?'ok':'ng'}">${v[1]?'✔':'✗'} ${v[0]}</div>`).join('')+`<div class="res ${all?'ok':'ng'}">${all?'達成！':'未達成'}</div>`;}
@@ -87,7 +90,7 @@ function Lab(root,o){let n=o.sizes[0],data,base=null,mi=0,x=0;const q=s=>root.qu
 /* ================= タブ②：箱ひげ図の双子 ================= */
 function Twins(root){let ti=0,data;const q=s=>root.querySelector(s);
  root.innerHTML=`<p class="lead">課題のデータと「箱ひげ図は同じ（5つの値が一致）なのに、データは違う」ものを作ろう。最初は課題と同じデータが入っています。</p><div class="ml"></div><div class="grid"></div><svg class="bs"></svg><div class="tb"></div><div class="stat"></div><button class="hi">ヒントを見る</button><button class="an">答えを見る</button><div class="out"></div>`;
- function render(){const a=stats(data),t=TWINS[ti],b=stats(t.d),L=['最小値','Q1','中央値','Q3','最大値'],A=five(a),B=five(b);setSvg(q('.bs'),boxSVG([['あなた',a],['課題',b]]),'0 0 520 136');
+ function render(){const a=stats(data),t=TWINS[ti],b=stats(t.d),L=['最小値','Q1','中央値','Q3','最大値'],A=five(a),B=five(b);setSvg(q('.bs'),boxSVG([['あなた',a],['課題',b]],true),'0 0 520 136');
   q('.tb').innerHTML='<table><tr><th></th>'+L.map(l=>`<th>${l}</th>`).join('')+'</tr><tr><td>あなた</td>'+A.map(f).map(v=>`<td>${v}</td>`).join('')+'</tr><tr><td>課題</td>'+B.map(f).map(v=>`<td>${v}</td>`).join('')+'</tr><tr><td>一致</td>'+A.map((v,i)=>`<td class="${eq(v,B[i])?'ok':'ng'}">${eq(v,B[i])?'✔':'✗'}</td>`).join('')+'</tr></table>';
   const s5=same5(a,b),dif=!sameSet(data,t.d);q('.stat').innerHTML=`<div class="${s5?'ok':'ng'}">${s5?'✔':'✗'} 箱ひげ図の5つの値がすべて一致</div><div class="${dif?'ok':'ng'}">${dif?'✔':'✗'} 課題とは異なるデータ（並べ替えただけは不可）</div><div class="res ${s5&&dif?'ok':'ng'}">${s5&&dif?'達成！ 異なるデータなのに同じ箱ひげ図':'未達成'}</div>`;}
  function pick(i){ti=i;q('.ml').innerHTML=TWINS.map((t,k)=>`<button data-i="${k}" class="${k===i?'on':''}">課題${k+1}（${t.d.length}個）</button>`).join('');data=editor(q('.grid'),TWINS[i].d,render);q('.out').innerHTML='';render();}
